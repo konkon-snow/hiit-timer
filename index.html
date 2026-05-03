@@ -1,0 +1,1123 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>HIIT TIMER</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0f0f12; --bg2: rgba(255,255,255,0.04); --bg3: rgba(255,255,255,0.08);
+    --border: rgba(255,255,255,0.09); --text: #f0f0f2;
+    --text2: rgba(255,255,255,0.45); --text3: rgba(255,255,255,0.28);
+    --scrollbar: rgba(255,255,255,0.12);
+  }
+  :root.light {
+    --bg: #dedad3; --bg2: rgba(0,0,0,0.05); --bg3: rgba(0,0,0,0.09);
+    --border: rgba(0,0,0,0.09); --text: #1c1a17;
+    --text2: rgba(28,26,23,0.52); --text3: rgba(28,26,23,0.34);
+    --scrollbar: rgba(0,0,0,0.14);
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not(.dark) {
+      --bg: #dedad3; --bg2: rgba(0,0,0,0.05); --bg3: rgba(0,0,0,0.09);
+      --border: rgba(0,0,0,0.09); --text: #1c1a17;
+      --text2: rgba(28,26,23,0.52); --text3: rgba(28,26,23,0.34);
+      --scrollbar: rgba(0,0,0,0.14);
+    }
+  }
+  html, body, #root {
+    width: 100%; height: 100%; background: var(--bg);
+    font-family: 'Inter', sans-serif; color: var(--text); overflow: hidden;
+    transition: background 0.3s, color 0.3s;
+    padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);
+  }
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 2px; }
+  button { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+// ── Constants ──────────────────────────────────────────────────────────────────
+
+/** LocalStorage keys. */
+const HISTORY_KEY = 'hiit_history';
+const CONFIG_KEY  = 'hiit_config';
+const THEME_KEY   = 'hiit_theme';
+const TWEAKS_KEY  = 'hiit_tweaks';
+
+/** Default values for user-configurable tweaks. */
+const TWEAK_DEFAULTS = {
+  accentWork: '#f97316',
+  accentRest: '#22d3ee',
+  showMotivation: true,
+  soundEnabled: true,
+};
+
+/**
+ * Number of seconds before a phase ends where countdown beeps begin.
+ * WORK gets two extra "warning" beeps at 5s and 4s.
+ */
+const COUNTDOWN_WORK_STEPS  = 5;
+const COUNTDOWN_REST_STEPS  = 3;
+const COUNTDOWN_WARN_CUTOFF = 3; // beeps at > WARN_CUTOFF use the softer warning tone
+
+/** Motivational phrases cycled randomly during each phase. */
+const WORK_PHRASES = ['PUSH IT!', 'GO GO GO!', 'MAX EFFORT!', 'BURN IT!', 'ALL OUT!'];
+const REST_PHRASES = ['BREATHE', 'RECOVER', 'ALMOST THERE', 'STAY READY', 'GOOD JOB'];
+
+// ── Utilities ──────────────────────────────────────────────────────────────────
+
+/**
+ * Zero-pads an integer to at least two digits.
+ *
+ * @param {number} n - Non-negative number to pad.
+ * @returns {string} Zero-padded string, e.g. 5 → "05".
+ */
+function pad(n) { return String(Math.floor(Math.max(0, n))).padStart(2, '0'); }
+
+/**
+ * Formats seconds into a compact time string.
+ *
+ * @param {number} sec - Total seconds (may be fractional; rounded).
+ * @returns {string} "m:ss" when ≥ 60 s, otherwise "Xs".
+ */
+function fmtTime(sec) {
+  const s = Math.max(0, Math.round(sec)), m = Math.floor(s / 60), r = s % 60;
+  return m > 0 ? `${m}:${pad(r)}` : `${r}s`;
+}
+
+/**
+ * Formats an ISO date string into a locale-friendly display string.
+ *
+ * @param {string} iso - ISO 8601 date string.
+ * @returns {string} Formatted as "YYYY/M/D HH:MM".
+ */
+function fmtDate(iso) {
+  const d = new Date(iso);
+  return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/**
+ * Computes the total remaining program time from the current state.
+ *
+ * @param {string} ph - Current phase: "work" or "rest".
+ * @param {number} tLeft - Seconds remaining in the current phase.
+ * @param {number} curSet - 1-based index of the current set.
+ * @param {{workTime:number, restTime:number, sets:number}} cfg - Timer config.
+ * @returns {number} Total seconds remaining in the program.
+ */
+function calcRemaining(ph, tLeft, curSet, cfg) {
+  let rem = tLeft;
+  if (ph === 'work') {
+    for (let s = curSet; s < cfg.sets; s++) rem += cfg.restTime + cfg.workTime;
+  } else {
+    for (let s = curSet + 1; s <= cfg.sets; s++) {
+      rem += cfg.workTime;
+      if (s < cfg.sets) rem += cfg.restTime;
+    }
+  }
+  return rem;
+}
+
+/**
+ * Pre-computes normalized [0, 1] segment boundaries for the outer ring.
+ *
+ * Each segment covers one WORK or REST interval as a fraction of the total
+ * program duration. The outer ring iterates these segments to draw and consume
+ * the arc as the timer runs.
+ *
+ * @param {{workTime:number, restTime:number, sets:number}} cfg - Timer config.
+ * @returns {Array<{start:number, end:number, isWork:boolean}>} Ordered segments.
+ */
+function computeSegments(cfg) {
+  const total = cfg.workTime * cfg.sets + cfg.restTime * Math.max(0, cfg.sets - 1);
+  if (total <= 0) return [];
+  const segs = [];
+  let t = 0;
+  for (let s = 0; s < cfg.sets; s++) {
+    segs.push({ start: t / total, end: (t + cfg.workTime) / total, isWork: true });
+    t += cfg.workTime;
+    if (s < cfg.sets - 1) {
+      segs.push({ start: t / total, end: (t + cfg.restTime) / total, isWork: false });
+      t += cfg.restTime;
+    }
+  }
+  return segs;
+}
+
+// ── LocalStorage helpers ───────────────────────────────────────────────────────
+
+/** @returns {Array<Object>} Stored workout history, newest first. */
+function loadHistory() {
+  try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch { return []; }
+}
+
+/**
+ * Prepends a new entry to the history, capping the list at 30 items.
+ *
+ * @param {Object} entry - Workout record to store.
+ */
+function saveHistoryEntry(entry) {
+  const h = loadHistory();
+  h.unshift(entry);
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(h.slice(0, 30)));
+}
+
+/** Removes all saved workout history from LocalStorage. */
+function clearHistory() { localStorage.removeItem(HISTORY_KEY); }
+
+/**
+ * Loads the timer config, falling back to Tabata defaults.
+ *
+ * @returns {{workTime:number, restTime:number, sets:number}}
+ */
+function loadConfig() {
+  try {
+    const c = JSON.parse(localStorage.getItem(CONFIG_KEY));
+    if (c?.workTime && c?.restTime && c?.sets) return c;
+  } catch {}
+  return { workTime: 20, restTime: 10, sets: 8 };
+}
+
+/**
+ * Persists the timer config to LocalStorage.
+ *
+ * @param {{workTime:number, restTime:number, sets:number}} cfg
+ */
+function saveConfig(cfg) { localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg)); }
+
+/**
+ * Loads user tweaks, merging with defaults for any missing keys.
+ *
+ * @returns {typeof TWEAK_DEFAULTS}
+ */
+function loadTweaks() {
+  try {
+    const t = JSON.parse(localStorage.getItem(TWEAKS_KEY));
+    if (t && typeof t === 'object') return { ...TWEAK_DEFAULTS, ...t };
+  } catch {}
+  return { ...TWEAK_DEFAULTS };
+}
+
+/**
+ * Persists user tweaks to LocalStorage.
+ *
+ * @param {typeof TWEAK_DEFAULTS} tweaks
+ */
+function saveTweaks(tweaks) { localStorage.setItem(TWEAKS_KEY, JSON.stringify(tweaks)); }
+
+// ── Theme ──────────────────────────────────────────────────────────────────────
+
+/**
+ * Applies a theme mode by toggling the `dark`/`light` class on <html>.
+ * "auto" removes both classes, deferring to the OS preference media query.
+ *
+ * @param {'dark'|'light'|'auto'} mode
+ */
+function applyTheme(mode) {
+  document.documentElement.classList.remove('dark', 'light');
+  if (mode === 'dark')  document.documentElement.classList.add('dark');
+  if (mode === 'light') document.documentElement.classList.add('light');
+}
+
+/**
+ * Custom hook that manages theme mode with LocalStorage persistence.
+ *
+ * @returns {{mode:string, setMode:Function, isDark:boolean}}
+ */
+function useTheme() {
+  const [mode, setMode] = useState(() => localStorage.getItem(THEME_KEY) || 'auto');
+  useEffect(() => { applyTheme(mode); localStorage.setItem(THEME_KEY, mode); }, [mode]);
+  const isDark = mode === 'dark' ? true : mode === 'light' ? false
+    : window.matchMedia('(prefers-color-scheme: dark)').matches;
+  return { mode, setMode, isDark };
+}
+
+// ── Audio ──────────────────────────────────────────────────────────────────────
+
+/**
+ * Plays a single sine-wave beep via the Web Audio API.
+ *
+ * @param {AudioContext|null} ctx - Active AudioContext, or null to skip.
+ * @param {number} [freq=880] - Oscillator frequency in Hz.
+ * @param {number} [dur=0.08] - Duration in seconds.
+ * @param {number} [gain=0.3] - Peak gain level [0, 1].
+ */
+function beep(ctx, freq = 880, dur = 0.08, gain = 0.3) {
+  if (!ctx) return;
+  const osc = ctx.createOscillator(), g = ctx.createGain();
+  osc.connect(g); g.connect(ctx.destination);
+  osc.frequency.value = freq;
+  g.gain.setValueAtTime(gain, ctx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+  osc.start(); osc.stop(ctx.currentTime + dur);
+}
+
+/** Standard countdown tick (3-2-1). @param {AudioContext|null} ctx */
+function beepCountdown(ctx) { beep(ctx, 440, 0.08, 0.25); }
+
+/** Softer warning tone for WORK at 5 s and 4 s remaining. @param {AudioContext|null} ctx */
+function beepWarning(ctx)   { beep(ctx, 330, 0.12, 0.18); }
+
+/** "Go!" accent played once the countdown reaches zero. @param {AudioContext|null} ctx */
+function beepGo(ctx)        { beep(ctx, 880, 0.18, 0.4); }
+
+/** Two-tone chime played on every phase transition. @param {AudioContext|null} ctx */
+function beepPhase(ctx)     { beep(ctx, 660, 0.06, 0.25); setTimeout(() => beep(ctx, 880, 0.1, 0.3), 110); }
+
+/** Ascending three-note fanfare played on workout completion. @param {AudioContext|null} ctx */
+function beepEnd(ctx)       { [0, 130, 260].forEach((d, i) => setTimeout(() => beep(ctx, [660, 880, 1100][i], 0.16, 0.36), d)); }
+
+// ── Dual Ring ──────────────────────────────────────────────────────────────────
+// Architecture:
+//   Outer ring (elapsedF): Renders pre-colored WORK/REST segments for the whole
+//     program. Consumed segments are clipped by advancing the arc start angle.
+//   Inner ring (phaseElapsedF): Solid current-phase color. Resets to 12 o'clock
+//     at every phase boundary and sweeps one full rotation per phase.
+//   Both rings are updated inside the same RAF tick() to stay in sync.
+//
+// SVG arc technique:
+//   strokeDasharray={visLen, circ - visLen} + strokeDashoffset=0 + rotate(angle)
+//   draws a clockwise arc starting at `angle` degrees from 12 o'clock (-90°).
+
+/**
+ * Renders the dual-ring progress indicator.
+ *
+ * @param {Object} props
+ * @param {number} props.elapsedF - Overall program progress [0, 1].
+ * @param {number} props.phaseElapsedF - Current phase progress [0, 1].
+ * @param {string} props.color - Active phase accent color.
+ * @param {string} props.workColor - Work phase accent color.
+ * @param {string} props.restColor - Rest phase accent color.
+ * @param {number} props.size - SVG canvas side length in pixels.
+ * @param {boolean} props.isDark - Whether dark theme is active.
+ * @param {Array<{start:number, end:number, isWork:boolean}>} props.segments
+ * @returns {React.ReactElement}
+ */
+function DualRing({ elapsedF, phaseElapsedF, color, workColor, restColor, size, isDark, segments }) {
+  const outerStroke = Math.max(5, size * 0.022);
+  const innerStroke = Math.max(11, size * 0.048);
+  const gap         = size * 0.038;
+  const outerR      = (size - outerStroke) / 2;
+  const innerR      = outerR - outerStroke / 2 - gap - innerStroke / 2;
+  const outerCirc   = 2 * Math.PI * outerR;
+  const innerCirc   = 2 * Math.PI * innerR;
+  const cx = size / 2, cy = size / 2;
+  const trackA = isDark ? '0.07' : '0.12';
+  const ef  = Math.max(0, Math.min(1, elapsedF));
+  const pef = Math.max(0, Math.min(1, phaseElapsedF));
+
+  // Inner ring: arc from 12 o'clock, shrinking as the phase progresses.
+  const innerLen   = (1 - pef) * innerCirc;
+  const innerAngle = -90 + pef * 360; // degrees; -90 = 12 o'clock
+
+  return (
+    <svg width={size} height={size} style={{ position: 'absolute', top: 0, left: 0 }}>
+      {/* Outer track (dim full circle) */}
+      <circle cx={cx} cy={cy} r={outerR} fill="none"
+        stroke={`rgba(128,128,128,${trackA})`} strokeWidth={outerStroke} />
+
+      {/* Outer segments: each drawn from its own consumed-boundary start angle */}
+      {segments.map((seg, i) => {
+        if (seg.end <= ef + 1e-9) return null; // fully consumed
+        const startF = Math.max(seg.start, ef);
+        const visLen = (seg.end - startF) * outerCirc;
+        if (visLen <= 0) return null;
+        const angle    = -90 + startF * 360;
+        const segColor = seg.isWork ? workColor : restColor;
+        return (
+          <circle key={i} cx={cx} cy={cy} r={outerR} fill="none"
+            stroke={segColor} strokeWidth={outerStroke} strokeLinecap="round"
+            opacity="0.6"
+            strokeDasharray={`${visLen} ${outerCirc - visLen}`}
+            strokeDashoffset={0}
+            transform={`rotate(${angle} ${cx} ${cy})`}
+          />
+        );
+      })}
+
+      {/* Inner track (dim full circle) */}
+      <circle cx={cx} cy={cy} r={innerR} fill="none"
+        stroke={`rgba(128,128,128,${trackA})`} strokeWidth={innerStroke} />
+
+      {/* Inner glow (blurred halo behind the arc) */}
+      {innerLen > 0 && (
+        <circle cx={cx} cy={cy} r={innerR} fill="none"
+          stroke={color} strokeWidth={innerStroke + 6} strokeLinecap="round"
+          opacity="0.12"
+          strokeDasharray={`${innerLen} ${innerCirc - innerLen}`}
+          strokeDashoffset={0}
+          transform={`rotate(${innerAngle} ${cx} ${cy})`}
+          style={{ filter: 'blur(6px)', transition: 'stroke 0.4s ease' }} />
+      )}
+
+      {/* Inner ring arc */}
+      {innerLen > 0 && (
+        <circle cx={cx} cy={cy} r={innerR} fill="none"
+          stroke={color} strokeWidth={innerStroke} strokeLinecap="round"
+          strokeDasharray={`${innerLen} ${innerCirc - innerLen}`}
+          strokeDashoffset={0}
+          transform={`rotate(${innerAngle} ${cx} ${cy})`}
+          style={{ transition: 'stroke 0.4s ease' }} />
+      )}
+    </svg>
+  );
+}
+
+// ── Theme Toggle ───────────────────────────────────────────────────────────────
+
+/**
+ * Icon button that cycles between dark and light theme.
+ *
+ * @param {Object} props
+ * @param {'dark'|'light'|'auto'} props.mode - Current theme mode.
+ * @param {Function} props.setMode - Setter for theme mode.
+ * @param {boolean} props.isDark - Whether dark theme is currently active.
+ * @param {Object} [props.style] - Additional inline styles.
+ * @returns {React.ReactElement}
+ */
+function ThemeToggle({ mode, setMode, isDark, style }) {
+  return (
+    <button
+      onClick={() => setMode(mode === 'dark' ? 'light' : 'dark')}
+      title="テーマ切替"
+      style={{
+        background: 'var(--bg2)', border: '1px solid var(--border)',
+        borderRadius: 10, width: 36, height: 36, color: 'var(--text2)',
+        fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center',
+        justifyContent: 'center', transition: 'background 0.15s', ...style,
+      }}
+      onMouseEnter={e => e.currentTarget.style.background = 'var(--bg3)'}
+      onMouseLeave={e => e.currentTarget.style.background = 'var(--bg2)'}
+    >{isDark ? '☀︎' : '☽'}</button>
+  );
+}
+
+// ── Field ──────────────────────────────────────────────────────────────────────
+
+/**
+ * Spinner control used in the setup screen for numeric config values.
+ *
+ * Defined at module level (not inside SetupScreen) so React can reconcile it
+ * across SetupScreen re-renders without unmounting/remounting each instance.
+ *
+ * @param {Object} props
+ * @param {string} props.label - All-caps label shown above the value.
+ * @param {number} props.value - Current numeric value.
+ * @param {Function} props.onInc - Called when the + button is pressed.
+ * @param {Function} props.onDec - Called when the − button is pressed.
+ * @param {string} props.unit - Unit label shown after the value.
+ * @param {string} props.color - CSS color applied to the numeric value.
+ * @returns {React.ReactElement}
+ */
+function Field({ label, value, onInc, onDec, unit, color }) {
+  const btnStyle = {
+    width: 38, height: 38, borderRadius: '50%', border: 'none',
+    background: 'var(--bg2)', color: 'var(--text)', fontSize: 20, cursor: 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    transition: 'background 0.15s', flexShrink: 0,
+  };
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7 }}>
+      <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.15em', color: 'var(--text3)', textTransform: 'uppercase' }}>
+        {label}
+      </span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <button onClick={onDec} style={btnStyle}
+          onMouseEnter={e => e.currentTarget.style.background = 'var(--bg3)'}
+          onMouseLeave={e => e.currentTarget.style.background = 'var(--bg2)'}
+        >−</button>
+        <div style={{ textAlign: 'center', minWidth: 64 }}>
+          <span style={{ fontSize: 40, fontWeight: 700, fontFamily: "'Space Grotesk',sans-serif", color, lineHeight: 1 }}>
+            {value}
+          </span>
+          <span style={{ fontSize: 11, color: 'var(--text3)', marginLeft: 4 }}>{unit}</span>
+        </div>
+        <button onClick={onInc} style={btnStyle}
+          onMouseEnter={e => e.currentTarget.style.background = 'var(--bg3)'}
+          onMouseLeave={e => e.currentTarget.style.background = 'var(--bg2)'}
+        >+</button>
+      </div>
+    </div>
+  );
+}
+
+// ── Countdown Screen ───────────────────────────────────────────────────────────
+
+/**
+ * Full-screen 3-2-1 countdown shown before the workout begins.
+ *
+ * @param {Object} props
+ * @param {Function} props.onDone - Called immediately when count reaches 1 (no "0" shown).
+ * @param {typeof TWEAK_DEFAULTS} props.tweaks
+ * @param {Function} props.getAudio - Returns the active AudioContext or null.
+ * @param {boolean} props.isDark
+ * @returns {React.ReactElement}
+ */
+function CountdownScreen({ onDone, tweaks, getAudio, isDark }) {
+  const [count, setCount] = useState(3);
+  const workColor = tweaks.accentWork;
+
+  useEffect(() => {
+    beepCountdown(getAudio());
+    const timer = setInterval(() => {
+      setCount(c => {
+        if (c <= 1) {
+          clearInterval(timer);
+          beepGo(getAudio());
+          onDone();
+          return 1;
+        }
+        beepCountdown(getAudio());
+        return c - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <div style={{
+      width: '100%', height: '100%', display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center', gap: 12,
+      position: 'relative', overflow: 'hidden',
+    }}>
+      {/* Ambient glow */}
+      <div style={{
+        position: 'absolute', width: '60vmin', height: '60vmin', borderRadius: '50%',
+        background: workColor, opacity: isDark ? 0.07 : 0.1, filter: 'blur(80px)',
+        top: '50%', left: '50%', transform: 'translate(-50%,-50%)', pointerEvents: 'none',
+      }} />
+      <div style={{ fontSize: 11, letterSpacing: '0.3em', color: 'var(--text3)', fontWeight: 600 }}>GET READY</div>
+      <div key={count} style={{
+        fontSize: '28vmin', fontWeight: 700, fontFamily: "'Space Grotesk',sans-serif",
+        color: 'var(--text)', lineHeight: 1,
+        animation: 'countPop 0.35s cubic-bezier(0.34,1.56,0.64,1) both',
+        textShadow: `0 0 60px ${workColor}${isDark ? '50' : '30'}`,
+      }}>{count}</div>
+      <style>{`@keyframes countPop{from{transform:scale(1.5);opacity:0}to{transform:scale(1);opacity:1}}`}</style>
+    </div>
+  );
+}
+
+// ── Timer Screen ───────────────────────────────────────────────────────────────
+
+/**
+ * Core workout timer screen with dual-ring animation.
+ *
+ * State is split into two layers:
+ *  - Integer state (phase, currentSet, timeLeft): driven by a 1-second interval,
+ *    triggers phase transitions.
+ *  - Smooth fractions (elapsedF, phaseElapsedF): driven by a 60 fps RAF loop,
+ *    feeds the ring animation without integer jitter.
+ *
+ * RAF / useEffect race condition note (see CLAUDE.md):
+ *  On phase transition, `sessionStartRef` is reset to `performance.now()`
+ *  before zeroing `phaseAccumMsRef`, ensuring the useEffect cleanup adds ~0 ms
+ *  rather than a stale session's worth.
+ *
+ * @param {Object} props
+ * @param {{workTime:number, restTime:number, sets:number}} props.config
+ * @param {Function} props.onReset - Navigates back to the setup screen.
+ * @param {typeof TWEAK_DEFAULTS} props.tweaks
+ * @param {Function} props.getAudio
+ * @param {boolean} props.isDark
+ * @returns {React.ReactElement}
+ */
+function TimerScreen({ config, onReset, tweaks, getAudio, isDark }) {
+  const workColor       = tweaks.accentWork;
+  const restColor       = tweaks.accentRest;
+  const totalProgramSec = config.workTime * config.sets + config.restTime * Math.max(0, config.sets - 1);
+  const segments        = useMemo(() => computeSegments(config), [config.workTime, config.restTime, config.sets]);
+
+  // ── Integer state (display & phase transitions) ──────────────────────────────
+  const [phase, setPhase]           = useState('work');
+  const [currentSet, setCurrentSet] = useState(1);
+  const [timeLeft, setTimeLeft]     = useState(config.workTime);
+  const [running, setRunning]       = useState(true);
+  const [phraseIdx, setPhraseIdx]   = useState(0);
+  const [showResult, setShowResult] = useState(false);
+  const [elapsedSec, setElapsedSec] = useState(0);
+
+  // ── Refs for 60 fps ring animation ───────────────────────────────────────────
+  const rafRef          = useRef(null);
+  const sessionStartRef = useRef(performance.now()); // wall-clock start of current running session
+  const phaseAccumMsRef = useRef(0);                 // ms elapsed in this phase before current session
+  const prevSecRef      = useRef(0);                 // seconds from all fully completed phases
+  const globalStartRef  = useRef(Date.now());
+  const beepedRef       = useRef(new Set());         // countdown values already beeped this phase
+  // Mirrors of state for use inside RAF callbacks (avoid stale closure values).
+  const runningRef      = useRef(true); runningRef.current = running;
+  const phaseRef        = useRef('work'); phaseRef.current = phase;
+
+  // ── Smooth progress fractions (fed to DualRing) ──────────────────────────────
+  const [elapsedF, setElapsedF]           = useState(0);
+  const [phaseElapsedF, setPhaseElapsedF] = useState(0);
+
+  // ── RAF loop: updates ring fractions at 60 fps ────────────────────────────────
+  useEffect(() => {
+    if (!running) return;
+    sessionStartRef.current = performance.now();
+
+    const tick = () => {
+      if (!runningRef.current) return;
+      const now            = performance.now();
+      const sessionMs      = now - sessionStartRef.current;
+      const totalInPhaseMs = phaseAccumMsRef.current + sessionMs;
+      const phaseDurMs     = (phaseRef.current === 'work' ? config.workTime : config.restTime) * 1000;
+      const smoothTL       = Math.max(0, (phaseDurMs - totalInPhaseMs) / 1000);
+      const phaseDurSec    = phaseDurMs / 1000;
+
+      // Countdown beeps: WORK 5,4,3,2,1 / REST 3,2,1
+      const intTL          = Math.ceil(smoothTL);
+      const isWorkPhase    = phaseRef.current === 'work';
+      const countdownSteps = isWorkPhase ? COUNTDOWN_WORK_STEPS : COUNTDOWN_REST_STEPS;
+      if (intTL >= 1 && intTL <= countdownSteps && !beepedRef.current.has(intTL)) {
+        beepedRef.current.add(intTL);
+        if (isWorkPhase && intTL > COUNTDOWN_WARN_CUTOFF) {
+          beepWarning(getAudio()); // 5 s, 4 s: softer warning tone
+        } else {
+          beepCountdown(getAudio()); // 3 s, 2 s, 1 s: standard tick
+        }
+      }
+
+      const progSec = prevSecRef.current + (phaseDurSec - smoothTL);
+      setElapsedF(Math.min(1, progSec / totalProgramSec));
+      setPhaseElapsedF(Math.min(1, totalInPhaseMs / phaseDurMs));
+      rafRef.current = requestAnimationFrame(tick);
+    };
+
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      // Accumulate elapsed ms so the next session resumes from the right position.
+      phaseAccumMsRef.current += performance.now() - sessionStartRef.current;
+    };
+  }, [running, phase]);
+
+  // ── 1-second interval: drives integer timeLeft display ───────────────────────
+  const intervalRef = useRef(null);
+  useEffect(() => {
+    if (!running) return;
+    intervalRef.current = setInterval(() => {
+      setTimeLeft(t => (t <= 1 ? 0 : t - 1));
+    }, 1000);
+    return () => clearInterval(intervalRef.current);
+  }, [running, phase]);
+
+  // ── Phase transitions: triggered when timeLeft hits 0 ────────────────────────
+  useEffect(() => {
+    if (timeLeft !== 0) return;
+    clearInterval(intervalRef.current);
+    cancelAnimationFrame(rafRef.current);
+
+    if (phase === 'work') {
+      if (currentSet >= config.sets) {
+        // Workout complete.
+        beepEnd(getAudio());
+        const el = Math.round((Date.now() - globalStartRef.current) / 1000);
+        setElapsedSec(el);
+        saveHistoryEntry({ date: new Date().toISOString(), config, elapsedSec: el });
+        setElapsedF(1);
+        setShowResult(true);
+      } else {
+        // Transition WORK → REST.
+        beepPhase(getAudio());
+        prevSecRef.current      += config.workTime;
+        sessionStartRef.current  = performance.now(); // keep cleanup delta ≈ 0
+        phaseAccumMsRef.current  = 0;
+        beepedRef.current        = new Set();
+        setPhaseElapsedF(0);
+        setPhase('rest');
+        setTimeLeft(config.restTime);
+        setPhraseIdx(Math.floor(Math.random() * REST_PHRASES.length));
+      }
+    } else {
+      // Transition REST → WORK.
+      beepPhase(getAudio());
+      prevSecRef.current      += config.restTime;
+      sessionStartRef.current  = performance.now(); // keep cleanup delta ≈ 0
+      phaseAccumMsRef.current  = 0;
+      beepedRef.current        = new Set();
+      setPhaseElapsedF(0);
+      setPhase('work');
+      setCurrentSet(s => s + 1);
+      setTimeLeft(config.workTime);
+      setPhraseIdx(Math.floor(Math.random() * WORK_PHRASES.length));
+    }
+  }, [timeLeft]);
+
+  if (showResult) {
+    return <ResultScreen config={config} elapsedSec={elapsedSec} onReset={onReset} tweaks={tweaks} isDark={isDark} />;
+  }
+
+  const RING_SIZE  = Math.min(260, Math.min(window.innerWidth * 0.85, window.innerHeight * 0.44));
+  const color      = phase === 'work' ? workColor : restColor;
+  const phrase     = phase === 'work' ? WORK_PHRASES[phraseIdx] : REST_PHRASES[phraseIdx];
+  const progRemain = calcRemaining(phase, timeLeft, currentSet, config);
+
+  return (
+    <div style={{
+      width: '100%', height: '100%', display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center', padding: '14px 20px',
+      position: 'relative', overflow: 'hidden',
+    }}>
+      {/* Ambient glow that follows the active phase color */}
+      <div style={{
+        position: 'absolute', width: '55vmin', height: '55vmin', borderRadius: '50%',
+        background: color, opacity: running ? (isDark ? 0.055 : 0.07) : 0.02,
+        filter: 'blur(90px)', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
+        transition: 'background 0.5s, opacity 0.5s', pointerEvents: 'none',
+      }} />
+
+      {/* Top info bar: SET / PHASE / LEFT */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
+        {[
+          { key: 'SET',   val: <><span style={{ color }}>{currentSet}</span><span style={{ color: 'var(--text3)', fontSize: 12 }}>/{config.sets}</span></>, mono: true },
+          { key: 'PHASE', val: <span style={{ color, transition: 'color 0.4s' }}>{phase === 'work' ? 'WORK' : 'REST'}</span>, mono: false },
+          { key: 'LEFT',  val: <span style={{ color: 'var(--text2)' }}>{fmtTime(progRemain)}</span>, mono: true },
+        ].map((item, i, arr) => (
+          <React.Fragment key={item.key}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text3)', fontWeight: 600, marginBottom: 3 }}>{item.key}</div>
+              <div style={{ fontSize: 15, fontWeight: 700, fontFamily: item.mono ? "'Space Grotesk',sans-serif" : 'inherit' }}>{item.val}</div>
+            </div>
+            {i < arr.length - 1 && <div style={{ width: 1, height: 28, background: 'var(--border)' }} />}
+          </React.Fragment>
+        ))}
+      </div>
+
+      {/* Dual ring + center countdown display */}
+      <div style={{ position: 'relative', width: RING_SIZE, height: RING_SIZE }}>
+        <DualRing
+          elapsedF={elapsedF} phaseElapsedF={phaseElapsedF} color={color}
+          workColor={workColor} restColor={restColor}
+          size={RING_SIZE} isDark={isDark} segments={segments}
+        />
+        <div style={{
+          position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center', gap: 3,
+        }}>
+          <div style={{
+            fontSize: RING_SIZE * 0.27, fontWeight: 700, fontFamily: "'Space Grotesk',sans-serif",
+            lineHeight: 1, color: 'var(--text)',
+            textShadow: running ? `0 0 32px ${color}35` : 'none', transition: 'text-shadow 0.4s',
+          }}>{pad(timeLeft)}</div>
+          {tweaks.showMotivation && (
+            <div style={{
+              fontSize: 8, fontWeight: 600, letterSpacing: '0.2em',
+              color: running ? color : 'var(--text3)', transition: 'color 0.4s',
+            }}>{phrase}</div>
+          )}
+        </div>
+      </div>
+
+      {/* Set progress dots — active set expands horizontally */}
+      <div style={{ display: 'flex', gap: 6, marginTop: 14, flexWrap: 'wrap', justifyContent: 'center', maxWidth: '80vw' }}>
+        {Array.from({ length: config.sets }, (_, i) => {
+          const done   = i + 1 < currentSet;
+          const active = i + 1 === currentSet;
+          return (
+            <div key={i} style={{
+              width: active ? 18 : 7, height: 7, borderRadius: 4,
+              background: done ? `${workColor}80` : active ? color : 'var(--bg3)',
+              transition: 'all 0.4s ease',
+              boxShadow: active ? `0 0 6px ${color}80` : 'none',
+            }} />
+          );
+        })}
+      </div>
+
+      {/* Controls: reset / pause-resume / skip */}
+      <div style={{ display: 'flex', gap: 14, marginTop: 20 }}>
+        <button onClick={onReset} title="リセット" style={{
+          width: 46, height: 46, borderRadius: '50%', border: '1px solid var(--border)',
+          background: 'var(--bg2)', color: 'var(--text2)', fontSize: 18, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.15s',
+        }}
+          onMouseEnter={e => e.currentTarget.style.background = 'var(--bg3)'}
+          onMouseLeave={e => e.currentTarget.style.background = 'var(--bg2)'}
+        >↺</button>
+        <button onClick={() => setRunning(r => !r)} style={{
+          width: 64, height: 64, borderRadius: '50%', border: 'none',
+          background: color, color: '#fff', fontSize: 20, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: `0 0 22px ${color}55`, transition: 'transform 0.2s',
+        }}
+          onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.06)'}
+          onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+        >{running ? '⏸' : '▶'}</button>
+        <button onClick={() => setTimeLeft(1)} title="スキップ" style={{
+          width: 46, height: 46, borderRadius: '50%', border: '1px solid var(--border)',
+          background: 'var(--bg2)', color: 'var(--text2)', fontSize: 15, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.15s',
+        }}
+          onMouseEnter={e => e.currentTarget.style.background = 'var(--bg3)'}
+          onMouseLeave={e => e.currentTarget.style.background = 'var(--bg2)'}
+        >⏭</button>
+      </div>
+    </div>
+  );
+}
+
+// ── Result Screen ──────────────────────────────────────────────────────────────
+
+/**
+ * Celebration screen shown when the workout is complete.
+ *
+ * @param {Object} props
+ * @param {{workTime:number, restTime:number, sets:number}} props.config
+ * @param {number} props.elapsedSec - Actual elapsed wall-clock seconds.
+ * @param {Function} props.onReset - Navigates back to the setup screen.
+ * @param {typeof TWEAK_DEFAULTS} props.tweaks
+ * @param {boolean} props.isDark
+ * @returns {React.ReactElement}
+ */
+function ResultScreen({ config, elapsedSec, onReset, tweaks, isDark }) {
+  const workColor = tweaks.accentWork;
+  const totalMin  = Math.floor(elapsedSec / 60);
+  const totalSec  = elapsedSec % 60;
+
+  return (
+    <div style={{
+      width: '100%', height: '100%', display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center', padding: '20px 24px',
+      position: 'relative', overflow: 'hidden',
+    }}>
+      {/* Ambient glow */}
+      <div style={{
+        position: 'absolute', width: '60vmin', height: '60vmin', borderRadius: '50%',
+        background: workColor, opacity: isDark ? 0.05 : 0.07, filter: 'blur(80px)',
+        top: '50%', left: '50%', transform: 'translate(-50%,-50%)', pointerEvents: 'none',
+      }} />
+
+      {/* Completion badge */}
+      <div style={{
+        width: 72, height: 72, borderRadius: '50%', border: `2px solid ${workColor}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        marginBottom: 20, boxShadow: `0 0 24px ${workColor}40`,
+        animation: 'resultPop 0.5s cubic-bezier(0.34,1.56,0.64,1) both',
+      }}>
+        <svg width="30" height="30" viewBox="0 0 30 30" fill="none">
+          <path d="M5 16l6 6 14-14" stroke={workColor} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </div>
+
+      {/* Total elapsed time */}
+      <div style={{
+        background: 'var(--bg2)', borderRadius: 18, padding: '16px 32px',
+        border: `1px solid ${workColor}20`, marginBottom: 12, textAlign: 'center',
+        animation: 'resultFadeUp 0.5s 0.15s ease both',
+      }}>
+        <div style={{ fontSize: 10, letterSpacing: '0.2em', color: 'var(--text3)', fontWeight: 600, marginBottom: 4 }}>TOTAL TIME</div>
+        <div style={{ fontSize: 44, fontWeight: 700, fontFamily: "'Space Grotesk',sans-serif", color: workColor, lineHeight: 1 }}>
+          {pad(totalMin)}<span style={{ fontSize: 20, color: 'var(--text3)' }}>:</span>{pad(totalSec)}
+        </div>
+      </div>
+
+      {/* Summary stats */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8,
+        width: '100%', maxWidth: 260, marginBottom: 24,
+        animation: 'resultFadeUp 0.5s 0.3s ease both',
+      }}>
+        {[
+          { value: config.sets,     unit: 'sets' },
+          { value: config.workTime, unit: 'sec'  },
+        ].map((s, i) => (
+          <div key={i} style={{
+            background: 'var(--bg2)', borderRadius: 12, padding: '11px 8px',
+            border: '1px solid var(--border)', textAlign: 'center',
+          }}>
+            <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Space Grotesk',sans-serif", lineHeight: 1, marginBottom: 3 }}>{s.value}</div>
+            <div style={{ fontSize: 9, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{s.unit}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ animation: 'resultFadeUp 0.5s 0.45s ease both' }}>
+        <button onClick={onReset} style={{
+          padding: '12px 36px', borderRadius: 60, border: 'none',
+          background: `linear-gradient(135deg,${workColor},${workColor}bb)`,
+          color: '#fff', fontSize: 13, fontWeight: 700, letterSpacing: '0.12em',
+          cursor: 'pointer', textTransform: 'uppercase',
+          boxShadow: `0 0 22px ${workColor}40`, transition: 'transform 0.15s',
+        }}
+          onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.04)'}
+          onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+        >TOP</button>
+      </div>
+
+      <style>{`
+        @keyframes resultPop{from{transform:scale(0.5);opacity:0}to{transform:scale(1);opacity:1}}
+        @keyframes resultFadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+      `}</style>
+    </div>
+  );
+}
+
+// ── History Panel ──────────────────────────────────────────────────────────────
+
+/**
+ * Modal overlay listing past workouts with a clear-all option.
+ *
+ * @param {Object} props
+ * @param {Function} props.onClose - Called to dismiss the panel.
+ * @param {string} props.workColor - Accent color used for elapsed-time highlights.
+ * @returns {React.ReactElement}
+ */
+function HistoryPanel({ onClose, workColor }) {
+  const [history, setHistory] = useState(loadHistory);
+
+  const handleClear = () => {
+    if (!confirm('履歴をすべて削除しますか？')) return;
+    clearHistory();
+    setHistory([]);
+  };
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
+        animation: 'fadeIn 0.2s ease',
+      }}
+      onClick={onClose}
+    >
+      <div onClick={e => e.stopPropagation()} style={{
+        background: 'var(--bg)', borderRadius: 20, padding: '20px 18px',
+        width: 'min(88vw,340px)', maxHeight: '70vh', display: 'flex', flexDirection: 'column',
+        border: '1px solid var(--border)', boxShadow: '0 24px 60px rgba(0,0,0,0.4)',
+      }}>
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+          <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: 'var(--text2)' }}>HISTORY</span>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {history.length > 0 && (
+              <button onClick={handleClear} style={{
+                background: 'var(--bg2)', border: '1px solid var(--border)',
+                borderRadius: 7, padding: '4px 10px', color: 'var(--text3)',
+                fontSize: 10, letterSpacing: '0.06em', cursor: 'pointer', fontWeight: 600,
+                transition: 'background 0.15s, color 0.15s',
+              }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg3)'; e.currentTarget.style.color = 'var(--text2)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg2)'; e.currentTarget.style.color = 'var(--text3)'; }}
+              >CLEAR ALL</button>
+            )}
+            <button onClick={onClose} style={{
+              background: 'none', border: 'none', color: 'var(--text2)',
+              fontSize: 18, cursor: 'pointer', padding: 4, lineHeight: 1,
+            }}>×</button>
+          </div>
+        </div>
+
+        {/* Entry list */}
+        <div style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 7 }}>
+          {history.length === 0
+            ? <div style={{ textAlign: 'center', color: 'var(--text3)', fontSize: 13, padding: '28px 0' }}>No history yet</div>
+            : history.map((h, i) => (
+              <div key={i} style={{
+                background: 'var(--bg2)', borderRadius: 11, padding: '11px 13px',
+                border: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              }}>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 2 }}>{fmtDate(h.date)}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, fontFamily: "'Space Grotesk',sans-serif" }}>
+                    {h.config.workTime}s × {h.config.sets}
+                  </div>
+                </div>
+                <div style={{ fontSize: 15, fontWeight: 700, fontFamily: "'Space Grotesk',sans-serif", color: workColor }}>
+                  {fmtTime(h.elapsedSec)}
+                </div>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+      <style>{`@keyframes fadeIn{from{opacity:0}to{opacity:1}}`}</style>
+    </div>
+  );
+}
+
+// ── Setup Screen ───────────────────────────────────────────────────────────────
+
+/**
+ * Initial configuration screen where users set work time, rest time, and sets.
+ *
+ * @param {Object} props
+ * @param {{workTime:number, restTime:number, sets:number}} props.config
+ * @param {Function} props.onChange - `(key, value)` config updater.
+ * @param {Function} props.onStart - Navigates to the countdown screen.
+ * @param {typeof TWEAK_DEFAULTS} props.tweaks
+ * @param {boolean} props.isDark
+ * @param {'dark'|'light'|'auto'} props.themeMode
+ * @param {Function} props.setThemeMode
+ * @returns {React.ReactElement}
+ */
+function SetupScreen({ config, onChange, onStart, tweaks, isDark, themeMode, setThemeMode }) {
+  const workColor = tweaks.accentWork;
+  const restColor = tweaks.accentRest;
+  const [showHistory, setShowHistory] = useState(false);
+
+  const totalSec = config.workTime * config.sets + config.restTime * Math.max(0, config.sets - 1);
+  const totalMin = Math.floor(totalSec / 60);
+  const totalRem = totalSec % 60;
+
+  return (
+    <div style={{
+      width: '100%', height: '100%', display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center', padding: '18px 20px',
+      overflowY: 'auto', position: 'relative',
+    }}>
+      {/* Theme toggle */}
+      <ThemeToggle mode={themeMode} setMode={setThemeMode} isDark={isDark}
+        style={{ position: 'absolute', top: 16, right: 16 }} />
+
+      {/* Title */}
+      <div style={{ textAlign: 'center', marginBottom: 18 }}>
+        <div style={{ fontSize: 9, letterSpacing: '0.3em', color: 'var(--text3)', fontWeight: 600, marginBottom: 3 }}>HIIT</div>
+        <h1 style={{ fontSize: 28, fontWeight: 700, fontFamily: "'Space Grotesk',sans-serif", letterSpacing: '-0.02em', lineHeight: 1 }}>TIMER</h1>
+      </div>
+
+      {/* Work / Rest cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, width: '100%', maxWidth: 440, marginBottom: 10 }}>
+        <div style={{
+          background: 'var(--bg2)', borderRadius: 15, padding: '14px 12px',
+          border: `1px solid ${workColor}28`, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+        }}>
+          <div style={{ width: 7, height: 7, borderRadius: '50%', background: workColor, boxShadow: `0 0 8px ${workColor}` }} />
+          <Field label="Work" value={config.workTime} unit="sec" color={workColor}
+            onInc={() => onChange('workTime', Math.min(300, config.workTime + 5))}
+            onDec={() => onChange('workTime', Math.max(5, config.workTime - 5))} />
+        </div>
+        <div style={{
+          background: 'var(--bg2)', borderRadius: 15, padding: '14px 12px',
+          border: `1px solid ${restColor}28`, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+        }}>
+          <div style={{ width: 7, height: 7, borderRadius: '50%', background: restColor, boxShadow: `0 0 8px ${restColor}` }} />
+          <Field label="Rest" value={config.restTime} unit="sec" color={restColor}
+            onInc={() => onChange('restTime', Math.min(300, config.restTime + 5))}
+            onDec={() => onChange('restTime', Math.max(5, config.restTime - 5))} />
+        </div>
+      </div>
+
+      {/* Sets */}
+      <div style={{
+        background: 'var(--bg2)', borderRadius: 15, padding: '12px 16px',
+        border: '1px solid var(--border)', width: '100%', maxWidth: 440,
+        display: 'flex', justifyContent: 'center', marginBottom: 12,
+      }}>
+        <Field label="Sets" value={config.sets} unit="sets" color="var(--text)"
+          onInc={() => onChange('sets', Math.min(20, config.sets + 1))}
+          onDec={() => onChange('sets', Math.max(1, config.sets - 1))} />
+      </div>
+
+      {/* Total duration preview */}
+      <div style={{ fontSize: 11, color: 'var(--text3)', letterSpacing: '0.04em', marginBottom: 18 }}>
+        Total <span style={{ color: 'var(--text2)', fontWeight: 600 }}>
+          {totalMin > 0 ? `${totalMin}m${totalRem > 0 ? ' ' + totalRem + 's' : ''}` : `${totalSec}s`}
+        </span>
+      </div>
+
+      {/* Start button */}
+      <button onClick={onStart} style={{
+        padding: '13px 50px', borderRadius: 60, border: 'none',
+        background: `linear-gradient(135deg,${workColor},${workColor}bb)`,
+        color: '#fff', fontSize: 14, fontWeight: 700, letterSpacing: '0.12em',
+        cursor: 'pointer', textTransform: 'uppercase',
+        boxShadow: `0 0 28px ${workColor}40`, transition: 'transform 0.15s, box-shadow 0.15s',
+        marginBottom: 12,
+      }}
+        onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.04)'; e.currentTarget.style.boxShadow = `0 0 44px ${workColor}60`; }}
+        onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = `0 0 28px ${workColor}40`; }}
+      >START</button>
+
+      {/* History button */}
+      <button onClick={() => setShowHistory(true)} style={{
+        padding: '7px 20px', borderRadius: 20, cursor: 'pointer',
+        background: 'var(--bg2)', border: '1px solid var(--border)',
+        color: 'var(--text3)', fontSize: 11, fontWeight: 600,
+        letterSpacing: '0.08em', transition: 'background 0.15s, color 0.15s',
+      }}
+        onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg3)'; e.currentTarget.style.color = 'var(--text2)'; }}
+        onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg2)'; e.currentTarget.style.color = 'var(--text3)'; }}
+      >HISTORY</button>
+
+      {showHistory && <HistoryPanel onClose={() => setShowHistory(false)} workColor={workColor} />}
+    </div>
+  );
+}
+
+// ── App ────────────────────────────────────────────────────────────────────────
+
+/**
+ * Root component. Owns screen navigation, global config/tweaks state, Wake Lock,
+ * and the shared AudioContext.
+ *
+ * Screens: "setup" → "countdown" → "timer" → (result within timer) → "setup"
+ *
+ * @returns {React.ReactElement}
+ */
+function App() {
+  const { mode: themeMode, setMode: setThemeMode, isDark } = useTheme();
+  const [screen, setScreen] = useState('setup');
+  const [config, setConfig] = useState(loadConfig);
+  const [tweaks, setTweaksState] = useState(loadTweaks);
+
+  /** Updates a single config key and persists to LocalStorage. */
+  const handleChange = useCallback((key, val) => {
+    setConfig(c => { const next = { ...c, [key]: val }; saveConfig(next); return next; });
+  }, []);
+
+  /** Updates a single tweak key and persists to LocalStorage. */
+  const setTweak = useCallback((key, val) => {
+    setTweaksState(t => { const next = { ...t, [key]: val }; saveTweaks(next); return next; });
+  }, []);
+
+  // Wake Lock: prevent screen sleep during an active workout session.
+  const wakeLockRef = useRef(null);
+  useEffect(() => {
+    if (!('wakeLock' in navigator)) return;
+    if (screen === 'timer') {
+      navigator.wakeLock.request('screen').then(lock => { wakeLockRef.current = lock; }).catch(() => {});
+    } else {
+      wakeLockRef.current?.release().catch(() => {});
+      wakeLockRef.current = null;
+    }
+    return () => { wakeLockRef.current?.release().catch(() => {}); wakeLockRef.current = null; };
+  }, [screen]);
+
+  // Lazily initialize a single AudioContext shared across the session.
+  const audioCtx = useRef(null);
+  const getAudio = useCallback(() => {
+    if (!tweaks.soundEnabled) return null;
+    if (!audioCtx.current) audioCtx.current = new (window.AudioContext || window.webkitAudioContext)();
+    return audioCtx.current;
+  }, [tweaks.soundEnabled]);
+
+  const shared = { tweaks, getAudio, isDark };
+
+  return (
+    <div style={{ width: '100%', height: '100%', position: 'relative', background: 'var(--bg)', transition: 'background 0.3s' }}>
+      {screen === 'setup'     && <SetupScreen config={config} onChange={handleChange} onStart={() => setScreen('countdown')} themeMode={themeMode} setThemeMode={setThemeMode} {...shared} />}
+      {screen === 'countdown' && <CountdownScreen onDone={() => setScreen('timer')} {...shared} />}
+      {screen === 'timer'     && <TimerScreen key={JSON.stringify(config)} config={config} onReset={() => setScreen('setup')} {...shared} />}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
