@@ -19,14 +19,14 @@
     --scrollbar: rgba(255,255,255,0.12);
   }
   :root.light {
-    --bg: #dedad3; --bg2: rgba(0,0,0,0.05); --bg3: rgba(0,0,0,0.09);
+    --bg: #f4f1ea; --bg2: rgba(0,0,0,0.05); --bg3: rgba(0,0,0,0.09);
     --border: rgba(0,0,0,0.09); --text: #1c1a17;
     --text2: rgba(28,26,23,0.52); --text3: rgba(28,26,23,0.34);
     --scrollbar: rgba(0,0,0,0.14);
   }
   @media (prefers-color-scheme: light) {
     :root:not(.dark) {
-      --bg: #dedad3; --bg2: rgba(0,0,0,0.05); --bg3: rgba(0,0,0,0.09);
+      --bg: #f4f1ea; --bg2: rgba(0,0,0,0.05); --bg3: rgba(0,0,0,0.09);
       --border: rgba(0,0,0,0.09); --text: #1c1a17;
       --text2: rgba(28,26,23,0.52); --text3: rgba(28,26,23,0.34);
       --scrollbar: rgba(0,0,0,0.14);
@@ -1077,7 +1077,6 @@ function SetupScreen({ config, onChange, onStart, tweaks, isDark, themeMode, set
   const totalMin = Math.floor(totalSec / 60);
   const totalRem = totalSec % 60;
 
-  const isTabata = config.workTime === 20 && config.restTime === 10 && config.sets === 8;
   // config をタバタ式 20-10-8 に一括設定する。
   const applyTabataPreset = () => { onChange('workTime', 20); onChange('restTime', 10); onChange('sets', 8); };
 
@@ -1091,10 +1090,23 @@ function SetupScreen({ config, onChange, onStart, tweaks, isDark, themeMode, set
       <ThemeToggle mode={themeMode} setMode={setThemeMode} isDark={isDark}
         style={{ position: 'absolute', top: 16, right: 16 }} />
 
-      {/* Title */}
-      <div style={{ textAlign: 'center', marginBottom: 18 }}>
-        <div style={{ fontSize: 10, letterSpacing: '0.3em', color: 'var(--text3)', fontWeight: 600, marginBottom: 3 }}>HIIT</div>
-        <h1 style={{ fontSize: 32, fontWeight: 700, fontFamily: "'Space Grotesk',sans-serif", letterSpacing: '-0.02em', lineHeight: 1 }}>TIMER</h1>
+      {/* Title with help button */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 18 }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 10, letterSpacing: '0.3em', color: 'var(--text3)', fontWeight: 600, marginBottom: 3 }}>HIIT</div>
+          <h1 style={{ fontSize: 32, fontWeight: 700, fontFamily: "'Space Grotesk',sans-serif", letterSpacing: '-0.02em', lineHeight: 1 }}>TIMER</h1>
+        </div>
+        <button onClick={() => setShowHelp(true)} title="タバタ式とは"
+          aria-label="タバタ式ワークアウトの説明を開く" style={{
+          width: 36, height: 36, borderRadius: 10, cursor: 'pointer', flexShrink: 0,
+          background: 'var(--bg2)', border: '1px solid var(--border)', color: 'var(--text3)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.15s, color 0.15s',
+        }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg3)'; e.currentTarget.style.color = 'var(--text2)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg2)'; e.currentTarget.style.color = 'var(--text3)'; }}
+        >
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </button>
       </div>
 
       {/* Work / Rest cards */}
@@ -1150,20 +1162,19 @@ function SetupScreen({ config, onChange, onStart, tweaks, isDark, themeMode, set
         onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = `0 0 28px ${workColor}40`; }}
       >START</button>
 
-      {/* Secondary actions: help / history / tabata preset */}
+      {/* Secondary actions: tabata preset / history */}
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
-        {/* Help */}
-        <button onClick={() => setShowHelp(true)} title="タバタ式とは"
-          aria-label="タバタ式ワークアウトの説明を開く" style={{
-          width: 36, height: 36, borderRadius: '50%', cursor: 'pointer', flexShrink: 0,
-          background: 'var(--bg2)', border: '1px solid var(--border)', color: 'var(--text3)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.15s, color 0.15s',
+        {/* Tabata preset button — restores the recommended 20-10-8 config */}
+        <button onClick={applyTabataPreset} title="タバタ式 20-10-8 に戻す"
+          aria-label="タバタ式プリセット（WORK20秒・REST10秒・8セット）に設定" style={{
+          padding: '8px 22px', borderRadius: 20, cursor: 'pointer',
+          background: 'var(--bg2)', border: '1px solid var(--border)',
+          color: 'var(--text3)', fontSize: 12, fontWeight: 600,
+          letterSpacing: '0.08em', transition: 'background 0.15s, color 0.15s',
         }}
           onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg3)'; e.currentTarget.style.color = 'var(--text2)'; }}
           onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg2)'; e.currentTarget.style.color = 'var(--text3)'; }}
-        >
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-        </button>
+        >RESTORE</button>
 
         {/* History button */}
         <button onClick={() => setShowHistory(true)} style={{
@@ -1175,19 +1186,6 @@ function SetupScreen({ config, onChange, onStart, tweaks, isDark, themeMode, set
           onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg3)'; e.currentTarget.style.color = 'var(--text2)'; }}
           onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg2)'; e.currentTarget.style.color = 'var(--text3)'; }}
         >HISTORY</button>
-
-        {/* Tabata preset button — restores the recommended 20-10-8 config */}
-        <button onClick={applyTabataPreset} title="タバタ式 20-10-8 に戻す"
-          aria-label="タバタ式プリセット（WORK20秒・REST10秒・8セット）に設定" style={{
-          padding: '8px 22px', borderRadius: 20, cursor: 'pointer',
-          background: isTabata ? 'var(--bg3)' : 'var(--bg2)',
-          border: isTabata ? `1px solid ${workColor}55` : '1px solid var(--border)',
-          color: isTabata ? 'var(--text2)' : 'var(--text3)', fontSize: 12, fontWeight: 600,
-          letterSpacing: '0.08em', transition: 'background 0.15s, color 0.15s, border-color 0.15s',
-        }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg3)'; e.currentTarget.style.color = 'var(--text2)'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = isTabata ? 'var(--bg3)' : 'var(--bg2)'; e.currentTarget.style.color = isTabata ? 'var(--text2)' : 'var(--text3)'; }}
-        >RESTORE</button>
       </div>
 
       {showHistory && <HistoryPanel onClose={() => setShowHistory(false)} workColor={workColor} />}
