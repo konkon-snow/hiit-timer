@@ -46,10 +46,12 @@
   .wr-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .field-value { display: flex; align-items: baseline; justify-content: center; }
   .field-unit { margin-left: 4px; }
+  .action-row { display: flex; align-items: center; justify-content: center; gap: 12px; }
   @media (max-width: 480px) {
     .wr-grid { grid-template-columns: 1fr; }
     .field-value { flex-direction: column; align-items: center; }
     .field-unit { margin-left: 0; margin-top: 2px; }
+    .action-row { flex-direction: column; }
   }
 </style>
 </head>
@@ -1173,8 +1175,8 @@ function SetupScreen({ config, onChange, onStart, tweaks, isDark, themeMode, set
         </span>
       </div>
 
-      {/* Start + Restore row */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+      {/* Start + Restore row (stacks vertically on mobile so each button centers) */}
+      <div className="action-row" style={{ marginBottom: 12 }}>
         <button onClick={onStart} style={{
           padding: '14px 56px', borderRadius: 60, border: 'none',
           background: `linear-gradient(135deg,${workColor},${workColor}bb)`,
