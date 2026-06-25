@@ -560,7 +560,6 @@ function TimerScreen({ config, onReset, tweaks, getAudio, isDark }) {
   const sessionStartRef = useRef(performance.now()); // wall-clock start of current running session
   const phaseAccumMsRef = useRef(0);                 // ms elapsed in this phase before current session
   const prevSecRef      = useRef(0);                 // seconds from all fully completed phases
-  const globalStartRef  = useRef(Date.now());
   const beepedRef       = useRef(new Set());         // countdown values already beeped this phase
   // Mirrors of state for use inside RAF callbacks (avoid stale closure values).
   const runningRef      = useRef(true); runningRef.current = running;
@@ -631,9 +630,8 @@ function TimerScreen({ config, onReset, tweaks, getAudio, isDark }) {
       if (currentSet >= config.sets) {
         // Workout complete.
         beepEnd(getAudio());
-        const el = Math.round((Date.now() - globalStartRef.current) / 1000);
-        setElapsedSec(el);
-        saveHistoryEntry({ date: new Date().toISOString(), config, elapsedSec: el });
+        setElapsedSec(totalProgramSec);
+        saveHistoryEntry({ date: new Date().toISOString(), config, elapsedSec: totalProgramSec });
         setElapsedF(1);
         setShowResult(true);
       } else {
@@ -798,7 +796,7 @@ function TimerScreen({ config, onReset, tweaks, getAudio, isDark }) {
  *
  * @param {Object} props
  * @param {{workTime:number, restTime:number, sets:number}} props.config
- * @param {number} props.elapsedSec - Actual elapsed wall-clock seconds.
+ * @param {number} props.elapsedSec - Total program duration in seconds (work + rest).
  * @param {Function} props.onReset - Navigates back to the setup screen.
  * @param {typeof TWEAK_DEFAULTS} props.tweaks
  * @param {boolean} props.isDark
