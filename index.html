@@ -477,17 +477,20 @@ function CountdownScreen({ onDone, tweaks, getAudio, isDark }) {
 
   useEffect(() => {
     beepCountdown(getAudio());
+    // Drive the countdown from a local counter so onDone()/beeps run in the
+    // interval callback. Doing them inside a setCount updater fires the parent's
+    // setState while React is rendering this component, which it warns against.
+    let remaining = 3;
     const timer = setInterval(() => {
-      setCount(c => {
-        if (c <= 1) {
-          clearInterval(timer);
-          beepGo(getAudio());
-          onDone();
-          return 1;
-        }
-        beepCountdown(getAudio());
-        return c - 1;
-      });
+      remaining -= 1;
+      if (remaining <= 0) {
+        clearInterval(timer);
+        beepGo(getAudio());
+        onDone();
+        return;
+      }
+      beepCountdown(getAudio());
+      setCount(remaining);
     }, 1000);
     return () => clearInterval(timer);
   }, []);
