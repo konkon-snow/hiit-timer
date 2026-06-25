@@ -4,11 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>HIIT TIMER</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23f97316'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
-<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1133,7 +1134,7 @@ function SetupScreen({ config, onChange, onStart, tweaks, isDark, themeMode, set
           border: `1px solid ${workColor}28`, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
         }}>
           <div style={{ width: 7, height: 7, borderRadius: '50%', background: workColor, boxShadow: `0 0 8px ${workColor}` }} />
-          <Field label="Work" value={config.workTime} unit="s" color={workColor}
+          <Field label="Work" value={config.workTime} unit="sec" color={workColor}
             onInc={() => onChange('workTime', Math.min(300, config.workTime + 5))}
             onDec={() => onChange('workTime', Math.max(5, config.workTime - 5))} />
         </div>
@@ -1142,7 +1143,7 @@ function SetupScreen({ config, onChange, onStart, tweaks, isDark, themeMode, set
           border: `1px solid ${restColor}28`, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
         }}>
           <div style={{ width: 7, height: 7, borderRadius: '50%', background: restColor, boxShadow: `0 0 8px ${restColor}` }} />
-          <Field label="Rest" value={config.restTime} unit="s" color={restColor}
+          <Field label="Rest" value={config.restTime} unit="sec" color={restColor}
             onInc={() => onChange('restTime', Math.min(300, config.restTime + 5))}
             onDec={() => onChange('restTime', Math.max(5, config.restTime - 5))} />
         </div>
