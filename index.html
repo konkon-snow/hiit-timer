@@ -44,7 +44,13 @@
   ::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 2px; }
   button { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
   .wr-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  @media (max-width: 480px) { .wr-grid { grid-template-columns: 1fr; } }
+  .field-value { display: flex; align-items: baseline; justify-content: center; }
+  .field-unit { margin-left: 4px; }
+  @media (max-width: 480px) {
+    .wr-grid { grid-template-columns: 1fr; }
+    .field-value { flex-direction: column; align-items: center; }
+    .field-unit { margin-left: 0; margin-top: 2px; }
+  }
 </style>
 </head>
 <body>
@@ -447,11 +453,11 @@ function Field({ label, value, onInc, onDec, unit, color }) {
           onMouseEnter={e => e.currentTarget.style.background = 'var(--bg3)'}
           onMouseLeave={e => e.currentTarget.style.background = 'var(--bg2)'}
         >−</button>
-        <div style={{ textAlign: 'center', minWidth: 72 }}>
+        <div className="field-value" style={{ minWidth: 72 }}>
           <span style={{ fontSize: 46, fontWeight: 700, fontFamily: "'Space Grotesk',sans-serif", color, lineHeight: 1 }}>
             {value}
           </span>
-          <span style={{ fontSize: 12, color: 'var(--text3)', marginLeft: 4 }}>{unit}</span>
+          <span className="field-unit" style={{ fontSize: 12, color: 'var(--text3)' }}>{unit}</span>
         </div>
         <button onClick={onInc} style={btnStyle}
           onMouseEnter={e => e.currentTarget.style.background = 'var(--bg3)'}
