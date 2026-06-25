@@ -19,17 +19,17 @@
     --scrollbar: rgba(255,255,255,0.12);
   }
   :root.light {
-    --bg: #f4f1ea; --bg2: rgba(0,0,0,0.05); --bg3: rgba(0,0,0,0.09);
-    --border: rgba(0,0,0,0.09); --text: #1c1a17;
-    --text2: rgba(28,26,23,0.52); --text3: rgba(28,26,23,0.34);
-    --scrollbar: rgba(0,0,0,0.14);
+    --bg: #eef0f1; --bg2: #ffffff; --bg3: #e4e5e7;
+    --border: rgba(0,0,0,0.1); --text: #18181b;
+    --text2: rgba(0,0,0,0.56); --text3: rgba(0,0,0,0.40);
+    --scrollbar: rgba(0,0,0,0.16);
   }
   @media (prefers-color-scheme: light) {
     :root:not(.dark) {
-      --bg: #f4f1ea; --bg2: rgba(0,0,0,0.05); --bg3: rgba(0,0,0,0.09);
-      --border: rgba(0,0,0,0.09); --text: #1c1a17;
-      --text2: rgba(28,26,23,0.52); --text3: rgba(28,26,23,0.34);
-      --scrollbar: rgba(0,0,0,0.14);
+      --bg: #eef0f1; --bg2: #ffffff; --bg3: #e4e5e7;
+      --border: rgba(0,0,0,0.1); --text: #18181b;
+      --text2: rgba(0,0,0,0.56); --text3: rgba(0,0,0,0.40);
+      --scrollbar: rgba(0,0,0,0.16);
     }
   }
   html, body, #root {
@@ -1090,23 +1090,36 @@ function SetupScreen({ config, onChange, onStart, tweaks, isDark, themeMode, set
       <ThemeToggle mode={themeMode} setMode={setThemeMode} isDark={isDark}
         style={{ position: 'absolute', top: 16, right: 16 }} />
 
-      {/* Title with help button */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 18 }}>
-        <div style={{ textAlign: 'center' }}>
+      {/* Title row — history + help aligned right */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', maxWidth: 440, marginBottom: 18 }}>
+        <div style={{ textAlign: 'left' }}>
           <div style={{ fontSize: 10, letterSpacing: '0.3em', color: 'var(--text3)', fontWeight: 600, marginBottom: 3 }}>HIIT</div>
           <h1 style={{ fontSize: 32, fontWeight: 700, fontFamily: "'Space Grotesk',sans-serif", letterSpacing: '-0.02em', lineHeight: 1 }}>TIMER</h1>
         </div>
-        <button onClick={() => setShowHelp(true)} title="タバタ式とは"
-          aria-label="タバタ式ワークアウトの説明を開く" style={{
-          width: 36, height: 36, borderRadius: 10, cursor: 'pointer', flexShrink: 0,
-          background: 'var(--bg2)', border: '1px solid var(--border)', color: 'var(--text3)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.15s, color 0.15s',
-        }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg3)'; e.currentTarget.style.color = 'var(--text2)'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg2)'; e.currentTarget.style.color = 'var(--text3)'; }}
-        >
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {/* History button */}
+          <button onClick={() => setShowHistory(true)} style={{
+            padding: '8px 22px', borderRadius: 20, cursor: 'pointer',
+            background: 'var(--bg2)', border: '1px solid var(--border)',
+            color: 'var(--text3)', fontSize: 12, fontWeight: 600,
+            letterSpacing: '0.08em', transition: 'background 0.15s, color 0.15s',
+          }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg3)'; e.currentTarget.style.color = 'var(--text2)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg2)'; e.currentTarget.style.color = 'var(--text3)'; }}
+          >HISTORY</button>
+          {/* Help button — circular, matched to TIMER height */}
+          <button onClick={() => setShowHelp(true)} title="タバタ式とは"
+            aria-label="タバタ式ワークアウトの説明を開く" style={{
+            width: 32, height: 32, borderRadius: '50%', cursor: 'pointer', flexShrink: 0,
+            background: 'var(--bg2)', border: '1px solid var(--border)', color: 'var(--text3)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.15s, color 0.15s',
+          }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg3)'; e.currentTarget.style.color = 'var(--text2)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg2)'; e.currentTarget.style.color = 'var(--text3)'; }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </button>
+        </div>
       </div>
 
       {/* Work / Rest cards */}
@@ -1149,43 +1162,29 @@ function SetupScreen({ config, onChange, onStart, tweaks, isDark, themeMode, set
         </span>
       </div>
 
-      {/* Start button */}
-      <button onClick={onStart} style={{
-        padding: '14px 56px', borderRadius: 60, border: 'none',
-        background: `linear-gradient(135deg,${workColor},${workColor}bb)`,
-        color: '#fff', fontSize: 15, fontWeight: 700, letterSpacing: '0.12em',
-        cursor: 'pointer', textTransform: 'uppercase',
-        boxShadow: `0 0 28px ${workColor}40`, transition: 'transform 0.15s, box-shadow 0.15s',
-        marginBottom: 12,
-      }}
-        onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.04)'; e.currentTarget.style.boxShadow = `0 0 44px ${workColor}60`; }}
-        onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = `0 0 28px ${workColor}40`; }}
-      >START</button>
-
-      {/* Secondary actions: tabata preset / history */}
-      <div style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
-        {/* Tabata preset button — restores the recommended 20-10-8 config */}
+      {/* Start + Restore row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+        <button onClick={onStart} style={{
+          padding: '14px 56px', borderRadius: 60, border: 'none',
+          background: `linear-gradient(135deg,${workColor},${workColor}bb)`,
+          color: '#fff', fontSize: 15, fontWeight: 700, letterSpacing: '0.12em',
+          cursor: 'pointer', textTransform: 'uppercase',
+          boxShadow: `0 0 28px ${workColor}40`, transition: 'transform 0.15s, box-shadow 0.15s',
+        }}
+          onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.04)'; e.currentTarget.style.boxShadow = `0 0 44px ${workColor}60`; }}
+          onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = `0 0 28px ${workColor}40`; }}
+        >START</button>
+        {/* Tabata preset — restores the recommended 20-10-8 config */}
         <button onClick={applyTabataPreset} title="タバタ式 20-10-8 に戻す"
           aria-label="タバタ式プリセット（WORK20秒・REST10秒・8セット）に設定" style={{
-          padding: '8px 22px', borderRadius: 20, cursor: 'pointer',
+          padding: '14px 28px', borderRadius: 60, cursor: 'pointer',
           background: 'var(--bg2)', border: '1px solid var(--border)',
-          color: 'var(--text3)', fontSize: 12, fontWeight: 600,
-          letterSpacing: '0.08em', transition: 'background 0.15s, color 0.15s',
+          color: 'var(--text2)', fontSize: 13, fontWeight: 700, letterSpacing: '0.1em',
+          textTransform: 'uppercase', transition: 'background 0.15s, color 0.15s',
         }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg3)'; e.currentTarget.style.color = 'var(--text2)'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg2)'; e.currentTarget.style.color = 'var(--text3)'; }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg3)'; e.currentTarget.style.color = 'var(--text)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg2)'; e.currentTarget.style.color = 'var(--text2)'; }}
         >RESTORE</button>
-
-        {/* History button */}
-        <button onClick={() => setShowHistory(true)} style={{
-          padding: '8px 22px', borderRadius: 20, cursor: 'pointer',
-          background: 'var(--bg2)', border: '1px solid var(--border)',
-          color: 'var(--text3)', fontSize: 12, fontWeight: 600,
-          letterSpacing: '0.08em', transition: 'background 0.15s, color 0.15s',
-        }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg3)'; e.currentTarget.style.color = 'var(--text2)'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg2)'; e.currentTarget.style.color = 'var(--text3)'; }}
-        >HISTORY</button>
       </div>
 
       {showHistory && <HistoryPanel onClose={() => setShowHistory(false)} workColor={workColor} />}
